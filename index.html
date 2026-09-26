@@ -2403,11 +2403,11 @@
             mapTopo = L.map('map-topo', { maxBounds: INDIA_BOUNDS, maxBoundsViscosity: 1.0, minZoom: 4 }).setView(center, 8);
             L.tileLayer(topoUrl, { maxZoom: 17, attribution: topoAttr }).addTo(mapTopo);
 
-            // Rainfall Heatmap (India exclusive)
-            const plainUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-            const plainAttr = '&copy; OpenStreetMap contributors &copy; CARTO';
+            // Rainfall Heatmap (India exclusive - Free OpenStreetMap Basemap without watermarks)
+            const plainUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+            const plainAttr = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors';
             mapRainfall = L.map('map-rainfall', { maxBounds: INDIA_BOUNDS, maxBoundsViscosity: 1.0, minZoom: 4 }).setView(center, zoom);
-            L.tileLayer(plainUrl, { maxZoom: 17, attribution: plainAttr }).addTo(mapRainfall);
+            L.tileLayer(plainUrl, { maxZoom: 18, attribution: plainAttr }).addTo(mapRainfall);
 
             // Sim Map (India exclusive)
             mapSim = L.map('map-sim', { maxBounds: INDIA_BOUNDS, maxBoundsViscosity: 1.0, minZoom: 4 }).setView([30.734, 79.066], 12);
