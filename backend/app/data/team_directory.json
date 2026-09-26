@@ -1,0 +1,30 @@
+[
+  {
+    "id": "TM_01",
+    "name": "Team Leader",
+    "role": "Incident Commander",
+    "phone": "+919876543210",
+    "active": true
+  },
+  {
+    "id": "TM_02",
+    "name": "Sensor & IoT Lead",
+    "role": "Telemetry Specialist",
+    "phone": "+919876543211",
+    "active": true
+  },
+  {
+    "id": "TM_03",
+    "name": "Evacuation Officer",
+    "role": "Field Responders Lead",
+    "phone": "+919876543212",
+    "active": true
+  },
+  {
+    "id": "TM_04",
+    "name": "Communications Lead",
+    "role": "Public Warning Coordinator",
+    "phone": "+919876543213",
+    "active": true
+  }
+]
