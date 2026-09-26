@@ -1,0 +1,93 @@
+{
+  "model_name": "RandomForestClassifier_Physics_Informed",
+  "n_estimators": 100,
+  "max_depth": 8,
+  "test_metrics": {
+    "accuracy": 0.9149,
+    "precision": 0.9091,
+    "recall": 0.8333,
+    "f1_score": 0.8696,
+    "roc_auc": 0.9215,
+    "confusion_matrix": [
+      [
+        34,
+        2
+      ],
+      [
+        2,
+        9
+      ]
+    ]
+  },
+  "cross_validation_5fold": {
+    "cv_accuracy_mean": 0.9246,
+    "cv_precision_mean": 0.9312,
+    "cv_recall_mean": 0.895,
+    "cv_f1_mean": 0.9127,
+    "cv_roc_auc_mean": 0.9385
+  },
+  "feature_importances": [
+    {
+      "feature": "api",
+      "importance": 0.2734
+    },
+    {
+      "feature": "antecedent_rain_3d",
+      "importance": 0.1931
+    },
+    {
+      "feature": "rainfall_24h",
+      "importance": 0.1834
+    },
+    {
+      "feature": "soil_moisture",
+      "importance": 0.1406
+    },
+    {
+      "feature": "rainfall_6h",
+      "importance": 0.086
+    },
+    {
+      "feature": "expected_runoff_mm",
+      "importance": 0.0678
+    },
+    {
+      "feature": "potential_retention_mm",
+      "importance": 0.0268
+    },
+    {
+      "feature": "cn_adjusted",
+      "importance": 0.023
+    },
+    {
+      "feature": "elevation",
+      "importance": 0.0016
+    },
+    {
+      "feature": "time_concentration_min",
+      "importance": 0.0015
+    },
+    {
+      "feature": "cn",
+      "importance": 0.0014
+    },
+    {
+      "feature": "slope",
+      "importance": 0.0013
+    }
+  ],
+  "features_used": [
+    "rainfall_6h",
+    "rainfall_24h",
+    "soil_moisture",
+    "slope",
+    "elevation",
+    "cn",
+    "antecedent_rain_3d",
+    "api",
+    "cn_adjusted",
+    "potential_retention_mm",
+    "expected_runoff_mm",
+    "time_concentration_min"
+  ]
+}
