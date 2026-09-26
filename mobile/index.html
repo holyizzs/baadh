@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>RAINFO Flood Alerts</title>
+  <link rel="manifest" href="/mobile/manifest.json">
+  <link rel="icon" href="/mobile/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/mobile/icons/icon-192.png">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a; color: #e2e8f0; min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+      padding: max(20px, env(safe-area-inset-top)) 16px 32px;
+    }
+    h1 { font-size: 1.25rem; margin: 8px 0 2px; }
+    .sub { color: #94a3b8; font-size: .8rem; margin-bottom: 18px; }
+    .card {
+      width: 100%; max-width: 420px; background: #1e293b; border-radius: 14px;
+      padding: 18px; margin-bottom: 14px; border: 1px solid #334155;
+    }
+    .card h2 { font-size: .85rem; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 10px; }
+    select, input {
+      width: 100%; padding: 11px 12px; border-radius: 9px; border: 1px solid #475569;
+      background: #0f172a; color: #e2e8f0; font-size: 1rem; margin-bottom: 10px;
+    }
+    button {
+      width: 100%; padding: 13px; border: 0; border-radius: 10px; font-size: 1rem;
+      font-weight: 600; cursor: pointer; transition: filter .15s;
+    }
+    button:active { filter: brightness(1.2); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-danger { background: #b91c1c; color: #fff; margin-top: 8px; }
+    .btn-beep { background: #7c3aed; color: #fff; }
+    .status { display: flex; align-items: center; gap: 8px; font-size: .9rem; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #64748b; flex-shrink: 0; }
+    .dot.on { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .dot.warn { background: #eab308; }
+    .dot.err { background: #ef4444; }
+    .hint { font-size: .75rem; color: #64748b; margin-top: 8px; line-height: 1.45; }
+    .log { max-height: 220px; overflow-y: auto; font-size: .8rem; line-height: 1.5; }
+    .log-item { padding: 8px 10px; border-radius: 8px; background: #0f172a; margin-bottom: 6px; border-left: 3px solid #334155; }
+    .log-item.SEVERE { border-color: #ef4444; }
+    .log-item.HIGH { border-color: #f59e0b; }
+    .log-item.MODERATE { border-color: #eab308; }
+    .log-item .meta { color: #64748b; font-size: .7rem; }
+    .empty { color: #475569; text-align: center; padding: 12px 0; }
+    #toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      background: #334155; color: #fff; padding: 10px 18px; border-radius: 999px;
+      font-size: .85rem; opacity: 0; pointer-events: none; transition: opacity .3s; max-width: 90vw;
+    }
+    #toast.show { opacity: 1; }
+    .brand { font-size: 1.6rem; }
+  </style>
+</head>
+<body>
+  <div class="brand">🌊</div>
+  <h1>RAINFO Flood Alerts</h1>
+  <div class="sub">Flash flood early warning · NDMA Helpline 1078</div>
+
+  <div class="card">
+    <h2>Alert Status</h2>
+    <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Checking…</span></div>
+    <p class="hint" id="statusHint"></p>
+  </div>
+
+  <div class="card">
+    <h2>Enable Alerts</h2>
+    <select id="district">
+      <option value="ALL">📍 All districts</option>
+      <option value="Rudraprayag">Rudraprayag</option>
+      <option value="Chamoli">Chamoli</option>
+      <option value="Kedarnath">Kedarnath</option>
+      <option value="Uttarkashi">Uttarkashi</option>
+    </select>
+    <button class="btn-primary" id="enableBtn">🔔 Enable flood alerts &amp; beep</button>
+    <button class="btn-beep" id="testBeepBtn" style="margin-top:8px">📢 Test alert tone now</button>
+    <p class="hint">
+      On Android: tap Enable → Allow notifications → <b>Install app</b> from your browser menu.
+      Keep notifications allowed for loud beeps even when the app is closed.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Recent Alerts</h2>
+    <div class="log" id="log"><div class="empty">No alerts yet. You're safe for now.</div></div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- Firebase (compat build: works in page AND service worker) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>
+    'use strict';
+    const API = '';  // same origin as backend
+    const $ = (id) => document.getElementById(id);
+    const state = { token: null, messaging: null };
+
+    function toast(msg) {
+      const t = $('toast');
+      t.textContent = msg; t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3500);
+    }
+    function setStatus(kind, text, hint) {
+      $('statusDot').className = 'dot ' + kind;
+      $('statusText').textContent = text;
+      $('statusHint').textContent = hint || '';
+    }
+    function logAlert(district, risk, prob, source) {
+      const log = $('log');
+      const empty = log.querySelector('.empty');
+      if (empty) empty.remove();
+      const item = document.createElement('div');
+      item.className = risk;
+      const time = new Date().toLocaleTimeString();
+      item.innerHTML = '<b>' + risk + ' — ' + district + '</b><br>' +
+        'Flood probability ' + prob + '% · ' + source + '<span class="meta"><br>' + time + '</span>';
+      log.prepend(item);
+    }
+
+    // ---- Loud beep (audible even in Do-Not-Disturb via user-initiated audio context) ----
+    let audioCtx = null;
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    function beepEmergency() {
+      try {
+        ensureAudio();
+        const ctx = audioCtx;
+        const now = ctx.currentTime;
+        for (let i = 0; i < 3; i++) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.value = i % 2 ? 660 : 880;
+          gain.gain.setValueAtTime(0.0001, now + i * 0.5);
+          gain.gain.exponentialRampToValueAtTime(0.6, now + i * 0.5 + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.5 + 0.45);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(now + i * 0.5);
+          osc.stop(now + i * 0.5 + 0.5);
+        }
+      } catch (e) { console.warn('Beep failed:', e); }
+      if ('vibrate' in navigator) navigator.vibrate([500, 150, 500, 150, 500, 150, 800]);
+    }
+    // Keep an audio session warm while the tab is open so beeps aren't blocked
+    setInterval(() => { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); }, 2000);
+
+    navigator.serviceWorker.addEventListener('message', (ev) => {
+      if (ev.data && ev.data.type === 'BEEP_ALERT') beepEmergency();
+    });
+
+    // ---- Firebase messaging ----
+    function initFirebase() {
+      if (!window.firebase || !firebaseConfig || firebaseConfig.apiKey.indexOf('PASTE_') === 0) {
+        setStatus('warn', 'Firebase not configured',
+          'Paste your firebaseConfig into mobile/firebase-config.js (see file header).');
+        return false;
+      }
+      firebase.initializeApp(firebaseConfig);
+      state.messaging = firebase.messaging();
+      state.messaging.onMessage((payload) => {
+        // Foreground: notification arrives while app is open
+        const d = payload.data || {};
+        logAlert(d.district || 'District', (d.risk_level || 'ALERT'), d.probability || '?', 'Firebase push');
+        beepEmergency();
+        toast('🚨 Flood alert received!');
+      });
+      return true;
+    }
+
+    async function registerToken(token) {
+      const res = await fetch(API + '/api/alerts/register-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token, district: $('district').value, label: 'Mobile PWA' })
+      });
+      if (!res.ok) throw new Error('Registration failed (' + res.status + ')');
+      state.token = token;
+      return res.json();
+    }
+
+    async function enableAlerts() {
+      ensureAudio(); // user gesture: unlock audio for later beeps
+      try {
+        if (!state.messaging && !initFirebase()) return;
+
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          setStatus('err', 'Notifications blocked', 'Enable them in browser site settings to get flood alerts.');
+          return;
+        }
+
+        const reg = await navigator.serviceWorker.register('/mobile/fcm-sw.js');
+        const token = await state.messaging.getToken({
+          vapidKey: window.vapidKey,
+          serviceWorkerRegistration: reg
+        });
+        if (!token) { setStatus('err', 'No FCM token', 'Check firebase-config.js and Web Push certificate key.'); return; }
+
+        await registerToken(token);
+        setStatus('on', 'Alerts active', 'You will get a loud beep when flood risk rises in ' + $('district').value + '.');
+        toast('✅ Alerts enabled for ' + $('district').value);
+      } catch (e) {
+        console.error(e);
+        setStatus('err', 'Setup failed', e.message || String(e));
+      }
+    }
+
+    async function checkPushStatus() {
+      try {
+        const res = await fetch(API + '/api/alerts/push/status');
+        const data = await res.json();
+        if (!data.configured) {
+          setStatus('warn', 'Server: Firebase key missing',
+            'Backend needs firebase-service-account.json in the project root (see backend/app/services/push_service.py header).');
+        }
+      } catch (e) { /* backend offline; status stays neutral */ }
+    }
+
+    // Poll alert history so the app shows alerts even before FCM is configured
+    async function pollHistory() {
+      try {
+        const res = await fetch(API + '/api/alerts/history');
+        const data = await res.json();
+        (data.alerts || []).slice(0, 5).forEach(a => {
+          if (!a._seen) {
+            a._seen = true;
+            logAlert(a.village, a.risk_level, Math.round((a.probability || 0) * 100), 'Portal dispatch');
+          }
+        });
+      } catch (e) { /* offline */ }
+    }
+
+    $('enableBtn').addEventListener('click', enableAlerts);
+    $('testBeepBtn').addEventListener('click', () => { ensureAudio(); beepEmergency(); toast('📢 Test tone played'); });
+    $('district').addEventListener('change', async () => {
+      if (state.token) {
+        try { await registerToken(state.token); toast('Subscribed to ' + $('district').value); } catch (e) {}
+      }
+    });
+
+    // Boot
+    if ('serviceWorker' in navigator) {
+      pollHistory(); setInterval(pollHistory, 30000);
+      checkPushStatus();
+      navigator.serviceWorker.getRegistration('/mobile/').then(reg => {
+        if (reg) setStatus('warn', 'Service worker ready', 'Tap "Enable flood alerts" to activate beeps.');
+      });
+    } else {
+      setStatus('err', 'Unsupported browser', 'Use Chrome on Android or another push-capable browser.');
+    }
+  </script>
+</body>
+</html>
