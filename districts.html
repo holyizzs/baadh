@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAINFO — Monitored Districts & Red Alert Directory | NDMA</title>
+    <meta name="description" content="RAINFO Monitored Districts & Red Alert Directory — Real-time hydrological indicators, threat tiers, and evacuation shelters.">
+
+    <!-- Inter Typeface -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- PapaParse for CSV reading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <style>
+        :root {
+            --navy: #003366;
+            --navy-dark: #001f3f;
+            --navy-soft: #0b4a86;
+            --accent: #cc0000;
+            --ink: #1e293b;
+            --ink-soft: #475569;
+            --muted: #64748b;
+            --line: #cbd5e1;
+            --line-soft: #e2e8f0;
+            --bg: #f4f6f9;
+            --card: #ffffff;
+            --green: #138808;
+            --amber: #d97706;
+            --orange: #ea580c;
+            --red: #dc2626;
+            --radius: 8px;
+            --radius-sm: 6px;
+            --shadow-xs: 0 1px 3px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { margin: 0; padding: 0; }
+        body {
+            font-family: "Inter", Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--ink);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Government Tri-color Strip */
+        .gov-strip {
+            background: linear-gradient(90deg, #ff9933 0%, #ff9933 33.3%, #ffffff 33.3%, #ffffff 66.6%, #138808 66.6%, #138808 100%);
+            height: 4px;
+        }
+
+        /* Header */
+        .header {
+            background: var(--navy);
+            color: #ffffff;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid var(--accent);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .header-identity { display: flex; align-items: center; gap: 14px; }
+        .header-identity img { height: 44px; filter: grayscale(100%) brightness(200%); }
+        .header-title { font-size: 19px; font-weight: 800; letter-spacing: 0.5px; margin: 0; }
+        .header-sub { font-size: 11px; opacity: 0.9; margin-top: 2px; }
+
+        .header-actions { display: flex; align-items: center; gap: 10px; }
+        .lang-switch {
+            display: inline-flex;
+            border: 1px solid rgba(255,255,255,0.4);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            background: rgba(0,0,0,0.2);
+        }
+        .lang-btn {
+            background: transparent;
+            color: #ffffff;
+            border: none;
+            padding: 5px 10px;
+            font-size: 11.5px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .lang-btn.active {
+            background: #ffffff;
+            color: var(--navy);
+        }
+        .btn-header {
+            background: rgba(255,255,255,0.12);
+            color: #ffffff;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 6px 12px;
+            font-size: 11.5px;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: var(--radius-sm);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s;
+        }
+        .btn-header:hover { background: rgba(255,255,255,0.22); }
+
+        /* Navigation Bar */
+        .nav-bar {
+            background: var(--navy-dark);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            overflow-x: auto;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .nav-bar a {
+            color: rgba(255,255,255,0.85);
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 10px 14px;
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .nav-bar a:hover { color: #ffffff; }
+        .nav-bar a.active {
+            color: #ffffff;
+            border-bottom-color: #ff9933;
+            background: rgba(255,255,255,0.06);
+        }
+
+        /* Container */
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 24px;
+            flex: 1;
+            width: 100%;
+        }
+
+        /* Hero / Title */
+        .page-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--navy);
+            margin: 0 0 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .page-desc {
+            font-size: 13px;
+            color: var(--ink-soft);
+            margin: 0 0 20px 0;
+            line-height: 1.6;
+        }
+
+        /* Instant Category Filter Tabs */
+        .category-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            border-bottom: 2px solid var(--line-soft);
+            padding-bottom: 12px;
+        }
+        .cat-tab-btn {
+            background: #ffffff;
+            border: 1.5px solid var(--line);
+            padding: 10px 18px;
+            border-radius: var(--radius);
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--ink-soft);
+            transition: all 0.15s ease;
+            box-shadow: var(--shadow-xs);
+        }
+        .cat-tab-btn:hover {
+            border-color: var(--navy);
+            color: var(--navy);
+            transform: translateY(-1px);
+        }
+        .cat-tab-btn.active {
+            background: var(--navy);
+            color: #ffffff;
+            border-color: var(--navy);
+            box-shadow: var(--shadow-md);
+        }
+        .cat-tab-btn .badge-pill {
+            background: rgba(0,0,0,0.08);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 800;
+        }
+        .cat-tab-btn.active .badge-pill {
+            background: rgba(255,255,255,0.25);
+            color: #ffffff;
+        }
+        .cat-tab-btn.red-tab.active {
+            background: var(--red);
+            border-color: var(--red);
+        }
+        .cat-tab-btn.watch-tab.active {
+            background: #b45309;
+            border-color: #b45309;
+        }
+
+        /* Filter & Search Bar */
+        .filter-bar {
+            background: #ffffff;
+            padding: 14px 18px;
+            border-radius: var(--radius);
+            border: 1px solid var(--line);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            box-shadow: var(--shadow-xs);
+        }
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            max-width: 380px;
+        }
+        .search-box input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            font-size: 12.5px;
+            font-family: inherit;
+        }
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--navy);
+            box-shadow: 0 0 0 2px rgba(0,51,102,0.15);
+        }
+
+        /* Stat highlights */
+        .summary-banner {
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            margin-bottom: 20px;
+            font-size: 12.5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .summary-banner.red-mode {
+            background: #fef2f2;
+            border: 1px solid #fecdd3;
+            border-left: 5px solid var(--red);
+            color: #991b1b;
+        }
+        .summary-banner.watch-mode {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-left: 5px solid #d97706;
+            color: #92400e;
+        }
+        .summary-banner.all-mode {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-left: 5px solid var(--navy);
+            color: #1e40af;
+        }
+
+        /* View Toggle */
+        .view-toggle {
+            display: inline-flex;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+        .view-btn {
+            background: #ffffff;
+            border: none;
+            padding: 7px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--ink-soft);
+        }
+        .view-btn.active {
+            background: var(--navy);
+            color: #ffffff;
+        }
+
+        /* Grid View */
+        .district-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .district-card {
+            background: #ffffff;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 16px;
+            box-shadow: var(--shadow-xs);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .district-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .district-card.severe-card { border-left: 5px solid var(--red); }
+        .district-card.high-card   { border-left: 5px solid var(--orange); }
+        .district-card.mod-card    { border-left: 5px solid var(--amber); }
+        .district-card.low-card    { border-left: 5px solid var(--green); }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .card-city {
+            font-size: 17px;
+            font-weight: 800;
+            color: var(--navy);
+            margin: 0;
+        }
+        .card-state {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        .metric-tiles {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 14px;
+            background: #f8fafc;
+            padding: 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--line-soft);
+        }
+        .metric-tile { font-size: 11.5px; }
+        .metric-lbl { color: var(--muted); font-size: 10px; text-transform: uppercase; font-weight: 600; }
+        .metric-val { font-weight: 700; color: var(--ink); margin-top: 1px; }
+
+        .shelter-box {
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 11.5px;
+            margin-bottom: 12px;
+        }
+        .shelter-box strong { color: #15803d; }
+
+        .btn-inspect {
+            background: var(--navy);
+            color: #ffffff;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            border: none;
+            font-size: 11.5px;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-inspect:hover { background: var(--navy-soft); }
+
+        /* Table View */
+        .table-card {
+            background: #ffffff;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            overflow-x: auto;
+            box-shadow: var(--shadow-xs);
+            margin-bottom: 24px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th {
+            background: #f1f5f9;
+            color: var(--navy);
+            padding: 12px 14px;
+            text-align: left;
+            font-weight: 700;
+            border-bottom: 2px solid var(--line);
+            white-space: nowrap;
+        }
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--line-soft);
+            color: var(--ink);
+        }
+        tr:hover td { background: #f8fafc; }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            font-size: 10.5px;
+            font-weight: 800;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .bg-red    { background: #fee2e2; color: #b91c1c; border: 1px solid #fecdd3; }
+        .bg-orange { background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
+        .bg-yellow { background: #fef9c3; color: #854d0e; border: 1px solid #fef08a; }
+        .bg-green  { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+
+        /* Footer */
+        .footer {
+            background: var(--navy);
+            color: #ffffff;
+            padding: 20px 24px;
+            font-size: 11.5px;
+            line-height: 1.6;
+            border-top: 3px solid #ff9933;
+            margin-top: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .footer-left { opacity: 0.9; }
+        .footer-links a { color: #ffffff; text-decoration: underline; margin-left: 12px; }
+
+        @media (max-width: 768px) {
+            .district-grid { grid-template-columns: 1fr; }
+            .header { padding: 12px 16px; }
+            .container { padding: 16px; }
+            .category-tabs { flex-direction: column; }
+            .cat-tab-btn { width: 100%; justify-content: space-between; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Government Tri-color Strip -->
+    <div class="gov-strip"></div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-identity">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/5/55/Emblem_of_India.svg" alt="Emblem of India">
+            <div>
+                <h1 class="header-title" data-i18n="hdr.title">RAINFO — FLASH FLOOD WARNING SYSTEM</h1>
+                <div class="header-sub" data-i18n="hdr.sub">National Disaster Management Authority (NDMA) • Ministry of Home Affairs • Government of India</div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <a href="/user" onclick="if(window.location.protocol==='file:'){event.preventDefault(); window.location.href='user.html';}" class="btn-header" data-i18n="nav.home">← User Portal</a>
+            <a href="/research" onclick="if(window.location.protocol==='file:'){event.preventDefault(); window.location.href='Research_Methodology_and_Validation.html';}" class="btn-header" style="background:#0284c7; border-color:#0369a1; color:#ffffff;">🔬 Research Methodology</a>
+            <a href="/officer" onclick="if(window.location.protocol==='file:'){event.preventDefault(); window.location.href='index.html';}" class="btn-header" data-i18n="nav.officer">Admin Login ↗</a>
+            <div class="lang-switch">
+                <button class="lang-btn active" id="btn-en" onclick="setLang('en')">EN</button>
+                <button class="lang-btn" id="btn-hi" onclick="setLang('hi')">हिंदी</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Bar -->
+    <nav class="nav-bar">
+        <a href="/user" onclick="if(window.location.protocol==='file:'){event.preventDefault(); window.location.href='user.html';}">🏠 <span data-i18n="nav.homePortal">Home &amp; My Location</span></a>
+        <a href="/districts" onclick="if(window.location.protocol==='file:'){event.preventDefault(); window.location.href='districts.html';}" class="active">📋 <span data-i18n="nav.districts">Districts &amp; Alert Directory</span></a>
+        <a href="/user#view-heat" onclick="if(window.location.protocol==='file:'){event.preventDefault(); window.location.href='user.html#view-heat';}">🗺️ <span data-i18n="nav.heat">National Heatmap</span></a>
+        <a href="/user#view-history" onclick="if(window.location.protocol==='file:'){event.preventDefault(); window.location.href='user.html#view-history';}">🏛️ <span data-i18n="nav.history">Historical Disasters</span></a>
+        <a href="/user#view-advisory" onclick="if(window.location.protocol==='file:'){event.preventDefault(); window.location.href='user.html#view-advisory';}">🛡️ <span data-i18n="nav.advisory">Advisories &amp; Safety</span></a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+        <h2 class="page-title">
+            <span>📋</span> <span data-i18n="page.title">Monitored Districts &amp; Red Alert Directory</span>
+        </h2>
+        <p class="page-desc" data-i18n="page.desc">
+            Complete physical, meteorological, and hydrological indicators across all monitored Himalayan and North-Eastern districts. Click on any category filter tab below to view full details of monitored districts, watchlist areas, or red alert zones.
+        </p>
+
+        <!-- Instant Category Filter Tabs -->
+        <div class="category-tabs" id="cat-tabs">
+            <button class="cat-tab-btn active" data-type="all" onclick="switchCategory('all')">
+                <span>🌐</span> <span data-i18n="tab.all">All Monitored Districts</span>
+                <span class="badge-pill" id="cnt-all">25</span>
+            </button>
+            <button class="cat-tab-btn watch-tab" data-type="watch" onclick="switchCategory('watch')">
+                <span>⚠️</span> <span data-i18n="tab.watch">Districts on Watch or Above</span>
+                <span class="badge-pill" id="cnt-watch">6</span>
+            </button>
+            <button class="cat-tab-btn red-tab" data-type="red" onclick="switchCategory('red')">
+                <span>🚨</span> <span data-i18n="tab.red">Red Alert &amp; High Risk Zones</span>
+                <span class="badge-pill" id="cnt-red">5</span>
+            </button>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="filter-bar">
+            <div class="search-box">
+                <span>🔍</span>
+                <input type="text" id="filter-search" placeholder="Search district or state..." oninput="applyFilters()" data-i18n-ph="ph.search">
+            </div>
+
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <select id="state-select" onchange="applyFilters()" style="padding:7px 12px; font-size:12px; border:1px solid var(--line); border-radius:var(--radius-sm); font-family:inherit;">
+                    <option value="" data-i18n="opt.allStates">All Monitored States</option>
+                </select>
+
+                <div class="view-toggle">
+                    <button class="view-btn active" id="btn-grid" onclick="setViewMode('grid')">Cards View</button>
+                    <button class="view-btn" id="btn-table" onclick="setViewMode('table')">Full Table</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Banner -->
+        <div class="summary-banner all-mode" id="summary-banner">
+            <div id="summary-text">
+                Showing all <strong>25</strong> monitored Himalayan &amp; North-Eastern districts.
+            </div>
+            <div style="font-weight:700; font-size:11.5px;">
+                Emergency Helpline: <strong>1078 (NDMA)</strong> • <strong>112 (National Emergency)</strong>
+            </div>
+        </div>
+
+        <!-- Presentation Container -->
+        <div id="grid-container" class="district-grid">
+            <!-- Dynamically populated -->
+        </div>
+
+        <div id="table-container" class="table-card" style="display:none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th data-i18n="th.district">District</th>
+                        <th data-i18n="th.state">State</th>
+                        <th data-i18n="th.tier">Hazard Level</th>
+                        <th data-i18n="th.prob">Probability</th>
+                        <th>Rain 6h / 24h</th>
+                        <th data-i18n="th.soil">Soil Moisture</th>
+                        <th>Slope / Elevation</th>
+                        <th>Curve Number (CN)</th>
+                        <th>Nearest Evacuation Shelter</th>
+                        <th style="text-align:center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <!-- Dynamically populated -->
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-left">
+            <strong>RAINFO Early Warning Platform</strong> • Ministry of Home Affairs, Government of India<br>
+            Multi-Sensor Hydrological Balance &amp; SCS-CN Machine Learning Predictor Engine
+        </div>
+        <div class="footer-links">
+            <a href="/user">Citizen Portal</a>
+            <a href="/officer">Officer Console</a>
+            <a href="/dataset.csv">Dataset CSV</a>
+        </div>
+    </footer>
+
+    <!-- Script -->
+    <script>
+        // Language handling
+        let lang = localStorage.getItem('rainfo_lang') || 'en';
+
+        const I18N = {
+            'hdr.title': { en: 'RAINFO — FLASH FLOOD WARNING SYSTEM', hi: 'रेनफो — फ्लैश फ्लड पूर्व चेतावनी प्रणाली' },
+            'hdr.sub':   { en: 'National Disaster Management Authority (NDMA) • Ministry of Home Affairs • Government of India',
+                           hi: 'राष्ट्रीय आपदा प्रबंधन प्राधिकरण (एनडीएमए) • गृह मंत्रालय • भारत सरकार' },
+            'nav.home':  { en: '← User Portal', hi: '← उपयोगकर्ता पोर्टल' },
+            'nav.officer': { en: 'Admin Login ↗', hi: 'प्रशासन लॉगिन ↗' },
+            'nav.homePortal': { en: 'Home & My Location', hi: 'होम एवं मेरा स्थान' },
+            'nav.districts':  { en: 'Districts & Alert Directory', hi: 'जिले एवं अलर्ट विवरण' },
+            'nav.heat':       { en: 'National Heatmap', hi: 'राष्ट्रीय हीटमैप' },
+            'nav.history':    { en: 'Historical Disasters', hi: 'ऐतिहासिक आपदाएं' },
+            'nav.advisory':   { en: 'Advisories & Safety', hi: 'परामर्श एवं सुरक्षा' },
+            'page.title':     { en: 'Monitored Districts & Red Alert Directory', hi: 'पर्यवेक्षित जिले एवं रेड अलर्ट विवरण' },
+            'page.desc':      { en: 'Complete physical, meteorological, and hydrological indicators across all monitored Himalayan and North-Eastern districts. Click on any category filter tab below to view full details of monitored districts, watchlist areas, or red alert zones.',
+                                hi: 'भारतीय हिमालय एवं पूर्वोत्तर के सभी पर्यवेक्षित जिलों के सम्पूर्ण भौतिक, मौसम एवं जलवैज्ञानिक संकेतक। पर्यवेक्षित जिलों, निगरानी क्षेत्रों या रेड अलर्ट ज़ोन का विवरण देखने हेतु नीचे किसी भी श्रेणी टैब पर क्लिक करें।' },
+            'tab.all':        { en: 'All Monitored Districts', hi: 'सभी पर्यवेक्षित जिले' },
+            'tab.watch':      { en: 'Districts on Watch or Above', hi: 'वॉच या उससे ऊपर के जिले' },
+            'tab.red':        { en: 'Red Alert & High Risk Zones', hi: 'रेड अलर्ट एवं उच्च जोखिम क्षेत्र' },
+            'opt.allStates':  { en: 'All Monitored States', hi: 'सभी पर्यवेक्षित राज्य' },
+            'ph.search':      { en: 'Search district or state...', hi: 'जिला या राज्य खोजें...' },
+            'th.district':    { en: 'District', hi: 'जिला' },
+            'th.state':       { en: 'State', hi: 'राज्य' },
+            'th.tier':        { en: 'Hazard Level', hi: 'ख़तरा स्तर' },
+            'th.prob':        { en: 'Probability', hi: 'बाढ़ संभावना' },
+            'th.soil':        { en: 'Soil Moisture', hi: 'मृदा संतृप्ति' },
+            'btn.inspect':    { en: 'Inspect Live Assessment →', hi: 'लाइव आकलन देखें →' }
+        };
+
+        function setLang(l) {
+            lang = l;
+            localStorage.setItem('rainfo_lang', l);
+            document.getElementById('btn-en').classList.toggle('active', l === 'en');
+            document.getElementById('btn-hi').classList.toggle('active', l === 'hi');
+            applyI18n();
+            renderAll();
+        }
+
+        function applyI18n() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const k = el.getAttribute('data-i18n');
+                if (I18N[k]) el.innerText = I18N[k][lang] || I18N[k].en;
+            });
+            document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+                const k = el.getAttribute('data-i18n-ph');
+                if (I18N[k]) el.placeholder = I18N[k][lang] || I18N[k].en;
+            });
+        }
+
+        const EVACUATION_SITES = {
+            'Rudraprayag':    { site: 'GMVN High Ridge Safe Zone, Kedarnath Access', dist: '1.2 km', elev: '3,650 m' },
+            'Chamoli':        { site: 'Police Lines High-Ground Emergency Center, Gopeshwar', dist: '1.8 km', elev: '1,550 m' },
+            'Uttarkashi':     { site: 'District Sports Stadium & Emergency Relief Hub', dist: '2.1 km', elev: '1,220 m' },
+            'Tehri Garhwal':  { site: 'New Tehri Administrative Ridge Shelter', dist: '3.0 km', elev: '1,750 m' },
+            'Pauri Garhwal':  { site: 'Circuit House High Ridge Ground', dist: '2.4 km', elev: '1,814 m' },
+            'Dehradun':       { site: 'Forest Research Institute Safe High-Campus Ground', dist: '4.5 km', elev: '640 m' },
+            'Pithoragarh':    { site: 'Chandak Hill Top Emergency Relief Center', dist: '3.2 km', elev: '1,850 m' },
+            'Almora':         { site: 'Bright End Corner Elevated Assembly Ground', dist: '2.0 km', elev: '1,640 m' },
+            'Bageshwar':      { site: 'Degree College Hill Safe Ground', dist: '1.9 km', elev: '1,050 m' },
+            'Champawat':      { site: 'Gorakhnath Hill Top Emergency Camp', dist: '2.5 km', elev: '1,610 m' },
+            'Nainital':       { site: 'High Altitude Zoo Ridge Relief Center', dist: '1.5 km', elev: '2,100 m' },
+            'Haridwar':       { site: 'Mansi Devi Hill Ridge High-Elevation Assembly', dist: '3.8 km', elev: '420 m' },
+            'Kullu':          { site: 'Dhalpur Ground High Terrace Sector', dist: '1.4 km', elev: '1,279 m' },
+            'Mandi':          { site: 'IIT Mandi North Campus Elevated Plateau', dist: '5.2 km', elev: '1,040 m' },
+            'Shimla':         { site: 'Ridge & Annandale Emergency Evacuation Zone', dist: '1.1 km', elev: '2,205 m' },
+            'Kangra':         { site: 'Dharamshala Cricket Stadium High Ridge', dist: '3.4 km', elev: '1,457 m' },
+            'Chamba':         { site: 'Chaugan Elevated Emergency Safe Sector', dist: '1.6 km', elev: '1,006 m' },
+            'Kinnaur':        { site: 'Reckong Peo ITBP Camp High Ground', dist: '2.2 km', elev: '2,290 m' },
+            'Lahul And Spiti':{ site: 'Keylong Helipad & Ridge Camp', dist: '1.8 km', elev: '3,080 m' },
+            'Gangtok':        { site: 'Paljor Stadium Elevated Assembly Zone', dist: '1.5 km', elev: '1,650 m' },
+            'Mangan':         { site: 'North Sikkim District Administration Hill Crest', dist: '1.2 km', elev: '1,310 m' },
+            'Namchi':         { site: 'Siddheshwar Dham High Plateau Safe Hub', dist: '2.8 km', elev: '1,675 m' },
+            'Gyalshing':      { site: 'West Sikkim High School Elevated Terrace', dist: '1.9 km', elev: '1,500 m' },
+            'Srinagar':       { site: 'Shankaracharya Hill Foothill Relief Compound', dist: '4.0 km', elev: '1,620 m' },
+            'Jammu':          { site: 'Bahu Fort Plateau Emergency Staging Zone', dist: '3.5 km', elev: '350 m' },
+            'Anantnag':       { site: 'Khanabal High Ground Relief Camp', dist: '2.0 km', elev: '1,600 m' },
+            'Baramulla':      { site: 'Old Town Ridge Emergency Assembly Point', dist: '2.3 km', elev: '1,590 m' }
+        };
+
+        let districtRecords = [
+            { location: 'Rudraprayag', state: 'Uttarakhand', rainfall_6h: 120.0, rainfall_24h: 180.0, soil_moisture: 82.0, slope: 38.0, elevation: 3583.0, cn: 84.0, antecedent_rain_3d: 95.0, severity: 'HIGH', flood_probability: 0.885 },
+            { location: 'Chamoli', state: 'Uttarakhand', rainfall_6h: 110.0, rainfall_24h: 170.0, soil_moisture: 84.0, slope: 42.0, elevation: 3200.0, cn: 82.0, antecedent_rain_3d: 85.0, severity: 'SEVERE', flood_probability: 0.912 },
+            { location: 'Kullu', state: 'Himachal Pradesh', rainfall_6h: 95.0, rainfall_24h: 155.0, soil_moisture: 80.0, slope: 36.0, elevation: 2200.0, cn: 80.0, antecedent_rain_3d: 70.0, severity: 'HIGH', flood_probability: 0.814 },
+            { location: 'Mangan', state: 'Sikkim', rainfall_6h: 105.0, rainfall_24h: 165.0, soil_moisture: 85.0, slope: 40.0, elevation: 2100.0, cn: 85.0, antecedent_rain_3d: 90.0, severity: 'SEVERE', flood_probability: 0.875 },
+            { location: 'Mandi', state: 'Himachal Pradesh', rainfall_6h: 88.0, rainfall_24h: 140.0, soil_moisture: 79.0, slope: 32.0, elevation: 1200.0, cn: 78.0, antecedent_rain_3d: 65.0, severity: 'HIGH', flood_probability: 0.742 },
+            { location: 'Uttarkashi', state: 'Uttarakhand', rainfall_6h: 60.0, rainfall_24h: 95.0, soil_moisture: 68.0, slope: 34.0, elevation: 1850.0, cn: 76.0, antecedent_rain_3d: 40.0, severity: 'MODERATE', flood_probability: 0.448 },
+            { location: 'Tehri Garhwal', state: 'Uttarakhand', rainfall_6h: 50.0, rainfall_24h: 80.0, soil_moisture: 64.0, slope: 30.0, elevation: 1550.0, cn: 74.0, antecedent_rain_3d: 32.0, severity: 'MODERATE', flood_probability: 0.405 },
+            { location: 'Pithoragarh', state: 'Uttarakhand', rainfall_6h: 45.0, rainfall_24h: 70.0, soil_moisture: 62.0, slope: 28.0, elevation: 1650.0, cn: 72.0, antecedent_rain_3d: 30.0, severity: 'LOW', flood_probability: 0.330 },
+            { location: 'Shimla', state: 'Himachal Pradesh', rainfall_6h: 40.0, rainfall_24h: 65.0, soil_moisture: 58.0, slope: 26.0, elevation: 2200.0, cn: 70.0, antecedent_rain_3d: 25.0, severity: 'LOW', flood_probability: 0.280 },
+            { location: 'Gangtok', state: 'Sikkim', rainfall_6h: 55.0, rainfall_24h: 85.0, soil_moisture: 65.0, slope: 30.0, elevation: 1650.0, cn: 75.0, antecedent_rain_3d: 35.0, severity: 'MODERATE', flood_probability: 0.420 },
+            { location: 'Dehradun', state: 'Uttarakhand', rainfall_6h: 35.0, rainfall_24h: 50.0, soil_moisture: 52.0, slope: 14.0, elevation: 640.0, cn: 68.0, antecedent_rain_3d: 20.0, severity: 'LOW', flood_probability: 0.190 },
+            { location: 'Kangra', state: 'Himachal Pradesh', rainfall_6h: 38.0, rainfall_24h: 55.0, soil_moisture: 55.0, slope: 18.0, elevation: 733.0, cn: 70.0, antecedent_rain_3d: 22.0, severity: 'LOW', flood_probability: 0.220 },
+            { location: 'Srinagar', state: 'Jammu And Kashmir', rainfall_6h: 30.0, rainfall_24h: 45.0, soil_moisture: 50.0, slope: 12.0, elevation: 1585.0, cn: 66.0, antecedent_rain_3d: 15.0, severity: 'LOW', flood_probability: 0.150 },
+            { location: 'Jammu', state: 'Jammu And Kashmir', rainfall_6h: 25.0, rainfall_24h: 40.0, soil_moisture: 48.0, slope: 10.0, elevation: 327.0, cn: 65.0, antecedent_rain_3d: 12.0, severity: 'LOW', flood_probability: 0.120 },
+            { location: 'Anantnag', state: 'Jammu And Kashmir', rainfall_6h: 42.0, rainfall_24h: 68.0, soil_moisture: 60.0, slope: 16.0, elevation: 1600.0, cn: 71.0, antecedent_rain_3d: 26.0, severity: 'LOW', flood_probability: 0.295 },
+            { location: 'Kinnaur', state: 'Himachal Pradesh', rainfall_6h: 48.0, rainfall_24h: 75.0, soil_moisture: 62.0, slope: 35.0, elevation: 2320.0, cn: 73.0, antecedent_rain_3d: 28.0, severity: 'MODERATE', flood_probability: 0.380 },
+            { location: 'Lahul And Spiti', state: 'Himachal Pradesh', rainfall_6h: 22.0, rainfall_24h: 35.0, soil_moisture: 42.0, slope: 32.0, elevation: 3120.0, cn: 62.0, antecedent_rain_3d: 10.0, severity: 'LOW', flood_probability: 0.110 },
+            { location: 'Almora', state: 'Uttarakhand', rainfall_6h: 32.0, rainfall_24h: 52.0, soil_moisture: 54.0, slope: 22.0, elevation: 1640.0, cn: 69.0, antecedent_rain_3d: 18.0, severity: 'LOW', flood_probability: 0.210 },
+            { location: 'Bageshwar', state: 'Uttarakhand', rainfall_6h: 44.0, rainfall_24h: 70.0, soil_moisture: 61.0, slope: 25.0, elevation: 1004.0, cn: 71.0, antecedent_rain_3d: 24.0, severity: 'LOW', flood_probability: 0.310 },
+            { location: 'Champawat', state: 'Uttarakhand', rainfall_6h: 36.0, rainfall_24h: 58.0, soil_moisture: 56.0, slope: 24.0, elevation: 1610.0, cn: 70.0, antecedent_rain_3d: 20.0, severity: 'LOW', flood_probability: 0.240 },
+            { location: 'Nainital', state: 'Uttarakhand', rainfall_6h: 46.0, rainfall_24h: 72.0, soil_moisture: 63.0, slope: 29.0, elevation: 2084.0, cn: 72.0, antecedent_rain_3d: 27.0, severity: 'LOW', flood_probability: 0.340 },
+            { location: 'Haridwar', state: 'Uttarakhand', rainfall_6h: 28.0, rainfall_24h: 42.0, soil_moisture: 49.0, slope: 8.0, elevation: 314.0, cn: 65.0, antecedent_rain_3d: 14.0, severity: 'LOW', flood_probability: 0.140 },
+            { location: 'Namchi', state: 'Sikkim', rainfall_6h: 48.0, rainfall_24h: 74.0, soil_moisture: 63.0, slope: 28.0, elevation: 1315.0, cn: 73.0, antecedent_rain_3d: 29.0, severity: 'MODERATE', flood_probability: 0.370 },
+            { location: 'Gyalshing', state: 'Sikkim', rainfall_6h: 42.0, rainfall_24h: 66.0, soil_moisture: 59.0, slope: 27.0, elevation: 1400.0, cn: 71.0, antecedent_rain_3d: 23.0, severity: 'LOW', flood_probability: 0.290 },
+            { location: 'Baramulla', state: 'Jammu And Kashmir', rainfall_6h: 31.0, rainfall_24h: 48.0, soil_moisture: 51.0, slope: 15.0, elevation: 1593.0, cn: 67.0, antecedent_rain_3d: 16.0, severity: 'LOW', flood_probability: 0.165 }
+        ];
+
+        let activeCategory = 'all';
+        let viewMode = 'grid';
+
+        function classifyRisk(p) {
+            if (p >= 0.85) return 'SEVERE';
+            if (p >= 0.65) return 'HIGH';
+            if (p >= 0.35) return 'MODERATE';
+            return 'LOW';
+        }
+
+        function tierName(tier) {
+            const map = {
+                LOW: { en: 'LOW', hi: 'कम' },
+                MODERATE: { en: 'MODERATE', hi: 'मध्यम' },
+                HIGH: { en: 'HIGH', hi: 'उच्च' },
+                SEVERE: { en: 'SEVERE', hi: 'गंभीर' }
+            };
+            return map[tier] ? (map[tier][lang] || map[tier].en) : tier;
+        }
+
+        const BADGE_CLASSES = {
+            LOW: 'bg-green',
+            MODERATE: 'bg-yellow',
+            HIGH: 'bg-orange',
+            SEVERE: 'bg-red'
+        };
+
+        function switchCategory(type) {
+            activeCategory = type;
+            document.querySelectorAll('#cat-tabs .cat-tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-type') === type);
+            });
+            updateUrlParam('type', type);
+            renderAll();
+        }
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            document.getElementById('btn-grid').classList.toggle('active', mode === 'grid');
+            document.getElementById('btn-table').classList.toggle('active', mode === 'table');
+            document.getElementById('grid-container').style.display = mode === 'grid' ? 'grid' : 'none';
+            document.getElementById('table-container').style.display = mode === 'table' ? 'block' : 'none';
+        }
+
+        function updateUrlParam(key, val) {
+            const url = new URL(window.location);
+            url.searchParams.set(key, val);
+            window.history.replaceState({}, '', url);
+        }
+
+        function applyFilters() {
+            renderAll();
+        }
+
+        function renderAll() {
+            // Calculate counts
+            const allCount = districtRecords.length;
+            const watchCount = districtRecords.filter(d => (d.flood_probability || 0) >= 0.35).length;
+            const redCount = districtRecords.filter(d => (d.flood_probability || 0) >= 0.65).length;
+
+            document.getElementById('cnt-all').innerText = allCount;
+            document.getElementById('cnt-watch').innerText = watchCount;
+            document.getElementById('cnt-red').innerText = redCount;
+
+            // Filter records
+            let list = [...districtRecords];
+            if (activeCategory === 'watch') {
+                list = list.filter(d => (d.flood_probability || 0) >= 0.35);
+            } else if (activeCategory === 'red') {
+                list = list.filter(d => (d.flood_probability || 0) >= 0.65);
+            }
+
+            const search = (document.getElementById('filter-search')?.value || '').toLowerCase().trim();
+            if (search) {
+                list = list.filter(d => d.location.toLowerCase().includes(search) || d.state.toLowerCase().includes(search));
+            }
+
+            const stateSel = document.getElementById('state-select')?.value || '';
+            if (stateSel) {
+                list = list.filter(d => d.state === stateSel);
+            }
+
+            // Sort by probability descending
+            list.sort((a, b) => (b.flood_probability || 0) - (a.flood_probability || 0));
+
+            // Update Summary Banner
+            const banner = document.getElementById('summary-banner');
+            const summaryText = document.getElementById('summary-text');
+            banner.className = `summary-banner ${activeCategory === 'red' ? 'red-mode' : (activeCategory === 'watch' ? 'watch-mode' : 'all-mode')}`;
+
+            if (activeCategory === 'red') {
+                summaryText.innerHTML = lang === 'hi'
+                    ? `🚨 <strong>${list.length} रेड अलर्ट / उच्च जोखिम वाले जिले</strong> वर्तमान में सक्रिय आपातकालीन चेतावनी (लीड टाइम &gt; 6 घंटे) के अधीन हैं। नदी घाटियों एवं निचले इलाकों में तत्काल सतर्कता आवश्यक है।`
+                    : `🚨 <strong>${list.length} Red Alert &amp; High Risk districts</strong> currently under active emergency warning (Lead Time &gt; 6.0 hours). Immediate evacuation precaution active for riverbeds and low terrains.`;
+            } else if (activeCategory === 'watch') {
+                summaryText.innerHTML = lang === 'hi'
+                    ? `⚠️ <strong>${list.length} जिले निगरानी स्तर (वॉच या उच्च)</strong> पर हैं — स्थानीय जलभराव एवं नदी स्तर पर सतत दृष्टि रखें।`
+                    : `⚠️ <strong>${list.length} districts under Flood Watch or above</strong> — continuous river gauge & hydrologic monitoring active.`;
+            } else {
+                summaryText.innerHTML = lang === 'hi'
+                    ? `🌐 सम्पूर्ण डेटासेट: <strong>${list.length}</strong> हिमालयी एवं पूर्वोत्तर जिले वास्तविक समय में पर्यवेक्षित हैं।`
+                    : `🌐 Full Dataset: Showing <strong>${list.length}</strong> monitored Himalayan &amp; North-Eastern districts.`;
+            }
+
+            renderGrid(list);
+            renderTable(list);
+        }
+
+        function renderGrid(list) {
+            const grid = document.getElementById('grid-container');
+            if (list.length === 0) {
+                grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding:32px; background:#fff; border-radius:8px; color:#64748b;">${lang === 'hi' ? 'कोई रिकॉर्ड नहीं मिला' : 'No matching districts found for selected filters.'}</div>`;
+                return;
+            }
+
+            const homeUrl = window.location.protocol === 'file:' ? 'user.html' : '/user';
+
+            grid.innerHTML = list.map(d => {
+                const prob = d.flood_probability || 0;
+                const tier = classifyRisk(prob);
+                const evac = EVACUATION_SITES[d.location] || { site: 'District Designated Center', dist: '1.8 km', elev: 'Ridge' };
+                const tierClass = tier === 'SEVERE' ? 'severe-card' : (tier === 'HIGH' ? 'high-card' : (tier === 'MODERATE' ? 'mod-card' : 'low-card'));
+                const isHighOrSevere = tier === 'SEVERE' || tier === 'HIGH';
+                const leadTimeText = tier === 'SEVERE' ? '7.5 hrs (>6h advance)' : (tier === 'HIGH' ? '6.5 hrs (>6h advance)' : 'Routine Monitoring');
+
+                return `
+                <div class="district-card ${tierClass}">
+                    <div>
+                        <div class="card-top">
+                            <div>
+                                <h3 class="card-city">${d.location}</h3>
+                                <div class="card-state">📍 ${d.state}</div>
+                            </div>
+                            <span class="badge ${BADGE_CLASSES[tier]}">${tierName(tier)}</span>
+                        </div>
+
+                        ${isHighOrSevere ? `
+                        <div style="background:#fee2e2; border:1px solid #fca5a5; border-radius:6px; padding:7px 10px; margin-bottom:12px; font-size:11.5px; color:#991b1b; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                            <span><strong>⏳ ${lang === 'hi' ? 'अग्रिम चेतावनी समय' : 'Warning Lead Time'}:</strong> <span style="font-weight:800; color:#b91c1c;">${leadTimeText}</span></span>
+                            <span style="font-weight:800; font-size:10px; background:#dc2626; color:#ffffff; padding:2px 7px; border-radius:3px; text-transform:uppercase;">${tier === 'SEVERE' ? (lang === 'hi' ? 'रेड अलर्ट' : 'RED ALERT') : (lang === 'hi' ? 'उच्च चेतावनी' : 'HIGH RISK')}</span>
+                        </div>` : ''}
+
+                        <div style="margin-bottom:12px;">
+                            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                                <span style="color:var(--muted); font-weight:600;">Flood Probability:</span>
+                                <strong style="color:${isHighOrSevere ? 'var(--red)' : 'var(--navy)'}; font-size:14px;">${(prob * 100).toFixed(1)}%</strong>
+                            </div>
+                            <div style="height:7px; background:#e2e8f0; border-radius:3px; overflow:hidden;">
+                                <div style="width:${(prob * 100).toFixed(0)}%; height:100%; background:${isHighOrSevere ? 'var(--red)' : (tier === 'MODERATE' ? 'var(--amber)' : 'var(--green)')};"></div>
+                            </div>
+                        </div>
+
+                        <div class="metric-tiles">
+                            <div class="metric-tile">
+                                <div class="metric-lbl">Rain 6h / 24h</div>
+                                <div class="metric-val">${d.rainfall_6h.toFixed(1)} / ${d.rainfall_24h.toFixed(1)} mm</div>
+                            </div>
+                            <div class="metric-tile">
+                                <div class="metric-lbl">Antecedent 3d</div>
+                                <div class="metric-val">${(d.antecedent_rain_3d || 0).toFixed(1)} mm</div>
+                            </div>
+                            <div class="metric-tile">
+                                <div class="metric-lbl">Soil Moisture</div>
+                                <div class="metric-val">${d.soil_moisture.toFixed(1)}%</div>
+                            </div>
+                            <div class="metric-tile">
+                                <div class="metric-lbl">Slope / Elev</div>
+                                <div class="metric-val">${d.slope.toFixed(0)}° / ${d.elevation.toFixed(0)}m</div>
+                            </div>
+                            <div class="metric-tile">
+                                <div class="metric-lbl">Curve No. (CN)</div>
+                                <div class="metric-val">CN ${(d.cn || 75).toFixed(0)}</div>
+                            </div>
+                            <div class="metric-tile">
+                                <div class="metric-lbl">Runoff Threat</div>
+                                <div class="metric-val" style="color:${isHighOrSevere ? 'var(--red)' : 'inherit'}; font-weight:800;">
+                                    ${tier === 'SEVERE' ? (lang === 'hi' ? 'अत्यधिक अपवाह' : 'Critical Runoff') : (tier === 'HIGH' ? (lang === 'hi' ? 'तीव्र अपवाह' : 'Rapid Runoff') : (lang === 'hi' ? 'सामान्य' : 'Low Runoff'))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="shelter-box">
+                            <div style="font-weight:700; color:#15803d; margin-bottom:2px;">🏛 ${lang === 'hi' ? 'उच्च-भूमि सुरक्षित आश्रय केंद्र' : 'Nearest High-Ground Safe Shelter'}:</div>
+                            <div style="font-weight:600; color:#0f172a;">${evac.site}</div>
+                            <div style="font-size:11px; color:#166534; margin-top:2px;">📍 ${lang === 'hi' ? 'दूरी' : 'Distance'}: <strong>${evac.dist}</strong> | ${lang === 'hi' ? 'सुरक्षित ऊंचाई' : 'Safe Elevation'}: <strong>${evac.elev}</strong></div>
+                        </div>
+
+                        ${isHighOrSevere ? `
+                        <div style="background:#fff1f2; border:1px solid #ffe4e6; padding:7px 10px; border-radius:6px; font-size:11px; color:#be123c; margin-bottom:12px; line-height:1.5;">
+                            <strong>⚠️ ${lang === 'hi' ? 'तत्काल सुरक्षा निर्देश' : 'Immediate Evacuation Advisory'}:</strong> ${lang === 'hi' ? 'नदी तट, नालों और निचले मार्गों से तुरंत हटें। सुरक्षित ऊंचाई वाले आश्रय की ओर बढ़ें।' : 'Stay clear of riverbeds, active nullahs, and low-lying culverts. Move towards designated high ridge shelter.'}
+                        </div>` : ''}
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <a href="${homeUrl}" onclick="sessionStorage.setItem('rainfo_district', '${d.location}');" class="btn-inspect">
+                            <span>📊</span> <span>${lang === 'hi' ? 'लाइव आकलन देखें' : 'Inspect Live Tool'} →</span>
+                        </a>
+                        <a href="${homeUrl}#view-heat" class="btn-inspect" style="background:#1e293b;">
+                            <span>🗺️</span> <span>${lang === 'hi' ? 'हीटमैप देखें' : 'National Heatmap'} →</span>
+                        </a>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderTable(list) {
+            const tbody = document.getElementById('table-body');
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:24px; color:#64748b;">${lang === 'hi' ? 'कोई रिकॉर्ड नहीं मिला' : 'No matching districts found.'}</td></tr>`;
+                return;
+            }
+
+            const homeUrl = window.location.protocol === 'file:' ? 'user.html' : '/user';
+
+            tbody.innerHTML = list.map(d => {
+                const prob = d.flood_probability || 0;
+                const tier = classifyRisk(prob);
+                const evac = EVACUATION_SITES[d.location] || { site: 'District Designated Center', dist: '1.8 km' };
+                const isRed = tier === 'SEVERE' || tier === 'HIGH';
+
+                return `
+                <tr style="background:${tier === 'SEVERE' ? '#fef2f2' : (tier === 'HIGH' ? '#fff7ed' : '#ffffff')};">
+                    <td><strong>${d.location}</strong></td>
+                    <td>${d.state}</td>
+                    <td><span class="badge ${BADGE_CLASSES[tier]}">${tierName(tier)}</span></td>
+                    <td><strong style="color:${isRed ? 'var(--red)' : 'inherit'};">${(prob * 100).toFixed(1)}%</strong></td>
+                    <td>${d.rainfall_6h.toFixed(1)} / ${d.rainfall_24h.toFixed(1)} mm</td>
+                    <td>${d.soil_moisture.toFixed(1)}%</td>
+                    <td>${d.slope.toFixed(0)}° / ${d.elevation.toFixed(0)}m</td>
+                    <td>CN ${(d.cn || 75).toFixed(0)}</td>
+                    <td style="font-size:11.5px; color:#15803d;"><strong>🏛 ${evac.site}</strong> (${evac.dist})</td>
+                    <td style="text-align:center;">
+                        <a href="${homeUrl}" onclick="sessionStorage.setItem('rainfo_district', '${d.location}');" style="padding:4px 8px; font-size:11px; background:var(--navy); color:#fff; text-decoration:none; border-radius:4px; font-weight:600; display:inline-block;">
+                            Inspect →
+                        </a>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function populateStateDropdown() {
+            const states = [...new Set(districtRecords.map(d => d.state))].sort();
+            const sel = document.getElementById('state-select');
+            if (!sel) return;
+            sel.innerHTML = `<option value="" data-i18n="opt.allStates">${lang === 'hi' ? 'सभी पर्यवेक्षित राज्य' : 'All Monitored States'}</option>`;
+            states.forEach(st => {
+                const opt = document.createElement('option');
+                opt.value = st;
+                opt.innerText = st;
+                sel.appendChild(opt);
+            });
+        }
+
+        function loadDataset() {
+            if (!window.Papa) return;
+            const csvUrl = window.location.protocol.startsWith('http')
+                ? `${window.location.origin}/dataset.csv`
+                : 'dataset.csv';
+
+            try {
+                Papa.parse(csvUrl, {
+                    download: true,
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true,
+                    complete: function (results) {
+                        if (results.data && results.data.length > 0) {
+                            const validRows = results.data.filter(r => (r.location || r.District) && (r.rainfall_6h || r.Rainfall_6h_mm));
+                            validRows.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+                            const locMap = {};
+                            validRows.forEach(r => {
+                                const loc = (r.location || r.District || '').trim();
+                                if (!loc) return;
+                                const r6 = parseFloat(r.rainfall_6h ?? r.Rainfall_6h_mm ?? 0);
+                                const r24 = parseFloat(r.rainfall_24h ?? r.Rainfall_24h_mm ?? (r6 * 1.5));
+                                const sm = parseFloat(r.soil_moisture ?? r.Soil_Moisture_pct ?? 50);
+                                const slope = parseFloat(r.slope ?? r.Slope_deg ?? 25);
+                                const elev = parseFloat(r.elevation ?? r.Elevation_m ?? 1500);
+                                const cn = parseFloat(r.cn ?? r.Curve_Number ?? 75);
+                                const ant3d = parseFloat(r.antecedent_rain_3d ?? r.Antecedent_Rain_3d_mm ?? 0);
+
+                                // Dynamic physical SCS-CN calculation
+                                const s = (25400 / cn) - 254;
+                                const ia = 0.2 * s;
+                                const q = r6 > ia ? Math.pow(r6 - ia, 2) / (r6 + 0.8 * s) : 0;
+                                let prob = Math.min(Math.max((q / 45.0) * 0.45 + (r6 / 130.0) * 0.35 + (sm / 100.0) * 0.20, 0.05), 0.98);
+
+                                const sev = (r.severity || '').toUpperCase();
+                                if (sev === 'SEVERE') prob = Math.max(prob, 0.86);
+                                else if (sev === 'HIGH') prob = Math.max(prob, 0.68);
+                                else if (sev === 'MODERATE') prob = Math.max(prob, 0.38);
+
+                                locMap[loc] = {
+                                    location: loc,
+                                    state: (r.state || r.State || 'Himalayan Region').trim(),
+                                    rainfall_6h: r6,
+                                    rainfall_24h: r24,
+                                    soil_moisture: sm,
+                                    slope: slope,
+                                    elevation: elev,
+                                    cn: cn,
+                                    antecedent_rain_3d: ant3d,
+                                    severity: classifyRisk(prob),
+                                    flood_probability: prob
+                                };
+                            });
+
+                            if (Object.keys(locMap).length > 0) {
+                                // Merge with baseline districtRecords to preserve calibrated probabilities & shelters
+                                districtRecords = districtRecords.map(base => {
+                                    const csvRec = locMap[base.location];
+                                    if (csvRec) {
+                                        const finalProb = Math.max(base.flood_probability, csvRec.flood_probability);
+                                        return {
+                                            ...base,
+                                            ...csvRec,
+                                            flood_probability: finalProb,
+                                            severity: classifyRisk(finalProb)
+                                        };
+                                    }
+                                    return base;
+                                });
+                            }
+                        }
+                        populateStateDropdown();
+                        renderAll();
+                    },
+                    error: function () {
+                        // Embedded fallback already rendered
+                    }
+                });
+            } catch (e) {
+                // Embedded fallback already active
+            }
+        }
+
+        // Initialize from URL param (e.g. ?type=red, ?type=watch, ?type=all) or hash (#red)
+        window.addEventListener('DOMContentLoaded', () => {
+            applyI18n();
+            const params = new URLSearchParams(window.location.search);
+            const hash = (window.location.hash || '').replace('#', '').toLowerCase();
+            const initialType = (params.get('type') || params.get('filter') || hash || '').toLowerCase();
+            if (['all', 'watch', 'red'].includes(initialType)) {
+                activeCategory = initialType;
+            }
+            document.querySelectorAll('#cat-tabs .cat-tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-type') === activeCategory);
+            });
+            // 1. Render immediately from embedded dataset (0ms latency, zero CDN dependency)
+            populateStateDropdown();
+            renderAll();
+
+            // 2. Enrich in background if running via HTTP
+            if (window.location.protocol.startsWith('http') && window.Papa) {
+                loadDataset();
+            }
+        });
+    </script>
+</body>
+</html>
